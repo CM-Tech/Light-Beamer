@@ -1,278 +1,429 @@
 <html>
+  <head>
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.11.1/jquery.min.js"></script>
+    <style>
+      #c,body,html {
+        width: 100%;
+        height: 100%;
+        background: black;
+        margin:0;
+        padding:0;
+      }
+      .chat-input {
+        display: absolute;
+        position: absolute;
+        bottom: calc(50% - 14px);
+        left: calc(50% - 100px);
+        width: 200px;
+        border: none;
+        border-bottom: solid 1px white;
+        border-top: solid 1px white;
+        background: none;
+        height: 30;
+        line-height: 30px;
+        font-size: 140%;
+        text-align: center;
+        color: white;
+      }
+      #overlay {
+        display: absolute;
+        position: absolute;
+        left: 0px;
+        right: 0px;
+        top: 0px;
+        bottom: 0px;
+        z-index: 100;
+        display: block;
+      }
+    </style>
+    <script defer=""></script>
 
-    <head>
-        <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.11.1/jquery.min.js"></script>
-        <style>
-            #c {
-                width:100%;
-                height:100%;
-                background:black;
-            }
-            body {
-                margin:0;
-            }
-            .chat-input {
-                display:absolute;
-                position: absolute;
-                bottom:calc(50% - 14px);
-                left:calc(50% - 100px);
-                width:200px;
-                border:none;
-                border-bottom:solid 1px white;
-                border-top:solid 1px white;
-                background:none;
-                height:30;
-                line-height:30px;
-                font-size:140%;
-                text-align:center;
-                color:white;
-            }
-            #overlay {
-                display:absolute;
-                position: absolute;
-                left: 0px;
-                right: 0px;
-                top: 0px;
-                bottom: 0px;
-                z-index: 100;
-                display: block;
-            }
-        </style>
-        <script defer=""></script>
+    <title> </title>
+  </head>
 
-        <title>
-        </title>
+  <body>
+    <div id="overlay"></div>
+    <canvas id="c" width="1059" height="662"></canvas>
+    <script>
+      // JavaScript
 
-    </head>
+      let tickC = 0;
+      var w = window.innerWidth;
+      var h = window.innerHeight;
+      var c = document.getElementById("c");
+      c.width = w;
+      c.height = h;
+      window.addEventListener("resize", () => {
+        w = window.innerWidth;
+        h = window.innerHeight;
 
-    <body>
-        <div id="overlay">
-          
-        </div>
-        <canvas id="c" width="1059" height="662"></canvas>
-        <script>
-            // JavaScript
+        c.width = w;
+        c.height = h;
+      });
+      var ctx = c.getContext("2d");
+      var mouseX = 0;
+      var mouseY = 0;
+      var mirrors = [];
+      var mirrorsSize = 0;
+      var offSet = 0;
+      var startX = null;
+      var startY = null;
+      function getCoords(event) {
+        mouseX = event.clientX;
+        mouseY = event.clientY;
+        //document.getElementById("demo").innerHTML = coords;
+      }
 
-            var w = $("body").width();
-            var h = $("body").height();
-            $("#c").attr("width", $("body").width());
+      function Line(x, y, ex, ey) {
+        this.x = x;
+        this.y = y;
+        this.ex = ex;
+        this.ey = ey;
+        this.len = Math.sqrt(
+          (this.x - this.ex) * (this.x - this.ex) +
+            (this.y - this.ey) * (this.y - this.ey)
+        );
+      }
 
-            $("#c").attr("height", $("body").height());
-            var c = document.getElementById("c");
-            var ctx = c.getContext("2d");
-            var mouseX = 0;
-            var mouseY = 0;
-            var mirrors=[];
-            var mirrorsSize=0;
-            var offSet=0;
-            var startX=null;
-            var startY=null;
-            function getCoords(event) {
-                mouseX = event.clientX;
-                mouseY = event.clientY;
-                //document.getElementById("demo").innerHTML = coords;
-            }
+      $("body").attr("onmousemove", "getCoords(event)");
+      $("body").mousedown(function (e) {
+        if (startX == null) {
+          //   ctx.clearRect(0, 0, w, h);
+          mirrors[mirrorsSize++] = new Line(mouseX, mouseY, mouseX, mouseY);
+          startX = mouseX;
+          startY = mouseY;
+        } else {
+          //   mirrors[mirrorsSize++] = new Line(startX, startY, mouseX, mouseY);
+          startX = null;
+          startY = null;
+          //   ctx.clearRect(0, 0, w, h);
+        }
+      });
 
-            function Line(x, y, ex, ey) {
-                this.x = x;
-                this.y = y;
-                this.ex = ex;
-                this.ey = ey;
-                this.len=Math.sqrt((this.x-this.ex)*(this.x-this.ex)+(this.y-this.ey)*(this.y-this.ey));
-            }
-            
-            $("body").attr("onmousemove", "getCoords(event)");
-             $("body").mousedown(function(e) {
+      $(".chat-input").keypress(function (e) {
+        readableName = $(".chat-input").val();
+      });
+      $("body").keypress(function (e) {
+        if (e.which == 32) {
+          //ctx.clearRect(0, 0, w, h);
+        }
+      });
 
-               if(startX==null){
-                   startX=mouseX;
-                    startY=mouseY;
-                    ctx.clearRect(0, 0, w, h);
-               }else{
-                   mirrors[mirrorsSize++]=new Line(startX,startY,mouseX,mouseY);
-                   startX=null;
-                    startY=null;
-                    ctx.clearRect(0, 0, w, h);
-               }
+      tick();
+      //var list = $firebaseArray(ref);
 
-            });
+      function drawLine(line) {
+        ctx.beginPath();
+        ctx.moveTo(line.x, line.y);
+        ctx.lineTo(line.ex, line.ey);
+        ctx.stroke();
+      }
+      function drawMirror(line) {
+        ctx.strokeStyle = "green";
+        ctx.beginPath();
+        ctx.moveTo(line.x, line.y);
+        ctx.lineTo(line.ex, line.ey);
+        ctx.stroke();
+      }
+      function tick() {
+        requestAnimationFrame(tick);
+        tickC += 1;
+        offSet = (offSet + (Math.sqrt(5) - 1) / 2) % 1;
+        ctx.fillStyle = "rgba(1,1,1,1)";
+        ctx.globalCompositeOperation = "difference";
+        // ctx.globalAlpha=0.01;
+        //     ctx.fillStyle = "#eeeeee";//"rgba(255,255,255," + brightness + ")";
+        if (tickC % 1 == 0) {
+          ctx.fillRect(0, 0, w, h);
+        }
+        // ctx.drawImage(c,0,0);
+        ctx.globalCompositeOperation = "source-over";
 
-            $(".chat-input").keypress(function(e) {
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = "rgba(0,0,0,0.05)";
+        if (tickC % 1 == 0) {
+          ctx.fillRect(0, 0, w, h);
+        }
+        // ctx.fill();
+        let rrrr = Math.random();
+        let height = c.height;
+        let width = c.width;
+        if (startX !== null) {
+          mirrors[mirrors.length - 1] = new Line(
+            startX,
+            startY,
+            mouseX,
+            mouseY
+          );
+        }
+        for (var i = 0; i < 360; i += 1) {
+          var dir = i + offSet; //rrrr;
+          var brightness = 0.02;
+          let diag = Math.sqrt(
+            window.innerWidth * window.innerWidth +
+              window.innerHeight * window.innerHeight
+          );
+          var line = new Line(
+            w / 2.0,
+            h / 2.0,
+            w / 2.0 + Math.sin(toRadians(dir)) * diag,
+            h / 2.0 + Math.cos(toRadians(dir)) * diag
+          );
 
-
-                readableName = $(".chat-input").val();
-
-            });
-            $("body").keypress(function(e) {
-
-                if (e.which == 32) {
-                    //ctx.clearRect(0, 0, w, h);
+          let lastMirror = null;
+          for (var r = 0; r < 100; r++) {
+            var newLine = null;
+            var ray = null;
+            let closestMirror = null;
+            let closestLen = null;
+            for (var l = 0; l < mirrors.length; l++) {
+              var lineIntersection = lineIntersect(mirrors[l], line);
+              if (
+                lineIntersection.x != null &&
+                lineIntersection.onLine1 &&
+                mirrors[l] !== lastMirror
+              ) {
+                if (
+                  Math.round(
+                    toDeg(
+                      Math.atan2(
+                        lineIntersection.x - line.x,
+                        lineIntersection.y - line.y
+                      )
+                    )
+                  ) ==
+                  Math.round(
+                    toDeg(Math.atan2(line.ex - line.x, line.ey - line.y))
+                  )
+                ) {
+                  var newRay = new Line(
+                    line.x,
+                    line.y,
+                    lineIntersection.x,
+                    lineIntersection.y
+                  );
+                  if (closestMirror === null) {
+                    closestMirror = mirrors[l];
+                    closestLen = newRay.len;
+                  } else if (closestLen > newRay.len) {
+                    closestLen = newRay.len;
+                    closestMirror = mirrors[l];
+                  }
                 }
+              }
+            }
+            if (closestMirror !== null) {
+              var l = mirrors.indexOf(closestMirror);
+              var lineIntersection = lineIntersect(mirrors[l], line);
+              if (
+                lineIntersection.x != null &&
+                lineIntersection.onLine1 &&
+                mirrors[l] !== lastMirror
+              ) {
+                lastMirror = mirrors[l];
 
-            });
+                if (
+                  Math.round(
+                    toDeg(
+                      Math.atan2(
+                        lineIntersection.x - line.x,
+                        lineIntersection.y - line.y
+                      )
+                    )
+                  ) ==
+                  Math.round(
+                    toDeg(Math.atan2(line.ex - line.x, line.ey - line.y))
+                  )
+                ) {
+                  var newRay = new Line(
+                    line.x,
+                    line.y,
+                    lineIntersection.x,
+                    lineIntersection.y
+                  );
 
-            setInterval(tick, 10);
-             //var list = $firebaseArray(ref);
+                  var reflectionLine = new Line(
+                    lineIntersection.x,
+                    lineIntersection.y,
+                    lineIntersection.x + (mirrors[l].y - lineIntersection.y),
+                    lineIntersection.y + (lineIntersection.x - mirrors[l].x)
+                  );
 
-            function drawLine(line) {
-                
-                ctx.beginPath();
-                ctx.moveTo(line.x, line.y);
-                ctx.lineTo(line.ex, line.ey);
-                ctx.stroke();
-            };
-            function drawMirror(line) {
-                ctx.strokeStyle = "green";
-                ctx.beginPath();
-                ctx.moveTo(line.x, line.y);
-                ctx.lineTo(line.ex, line.ey);
-                ctx.stroke();
-            };
-
-            function tick() {
-                offSet=(offSet+0.07)%10;
-                ctx.fillStyle="rgba(0,0,0,0.04)";
-                ctx.fillRect(0,0,w,h);
-                
-                ctx.fill();
-                
-                for (var i = 0; i <50; i+=1) { 
-                    var dir=Math.random()*360;
-                    var brightness=Math.random();
-                    var line = new Line(w / 2.0, h / 2.0, w / 2.0 + Math.sin(toRadians(dir))*10 , h / 2.0 + Math.cos(toRadians(dir)) * 10);
-                    for (var r = 0; r < 50; r++) {
-                        var newLine=null;
-                        var ray=null;
-                        for (var l = 0; l < mirrors.length; l++) {
-                           
-                            var lineIntersection=lineIntersect(mirrors[l],line);
-                            if(lineIntersection.x!=null && lineIntersection.onLine1){
-                                
-                                if(Math.round(toDeg(Math.atan2(lineIntersection.x-line.x,lineIntersection.y-line.y)))==
-                                Math.round(toDeg(Math.atan2(line.ex-line.x,line.ey-line.y)))){
-                                var newRay=new Line(line.x,line.y,lineIntersection.x,lineIntersection.y);
-                                
-                                var reflectionLine=new Line(lineIntersection.x,lineIntersection.y,lineIntersection.x+(mirrors[l].y-lineIntersection.y),
-                                lineIntersection.y+(lineIntersection.x-mirrors[l].x));
-                               
-                               if(newLine==null){
-                                   newLine=new Line(lineIntersection.x,lineIntersection.y,reflectOverLine(line.x,line.y,reflectionLine).x,reflectOverLine(line.x,line.y,reflectionLine).y)
-                                   ray=newRay;
-                               }else{
-                                   if(ray.len>newRay.len){
-                                       newLine=new Line(lineIntersection.x,lineIntersection.y,reflectOverLine(line.x,line.y,reflectionLine).x,reflectOverLine(line.x,line.y,reflectionLine).y)
-                                       ray=newRay;
-                                   }
-                               }
-                                }
-                            }
-                        }
-                        if(newLine==null){
-                            var newLine=new Line(line.x,line.y,(line.ex-line.x)*100+line.x,(line.ey-line.y)*100+line.y);
-                        }
-                        if(ray==null){
-                            var ray=new Line(line.x,line.y,line.ex,line.ey);
-                            
-                        }
-                        ctx.strokeStyle = "rgba(255,255,255,"+brightness+")";
-                        drawLine(ray);
-                        line=newLine;
+                  if (newLine == null) {
+                    newLine = new Line(
+                      lineIntersection.x,
+                      lineIntersection.y,
+                      reflectOverLine(line.x, line.y, reflectionLine).x,
+                      reflectOverLine(line.x, line.y, reflectionLine).y
+                    );
+                    ray = newRay;
+                  } else {
+                    if (ray.len > newRay.len) {
+                      newLine = new Line(
+                        lineIntersection.x,
+                        lineIntersection.y,
+                        reflectOverLine(line.x, line.y, reflectionLine).x,
+                        reflectOverLine(line.x, line.y, reflectionLine).y
+                      );
+                      ray = newRay;
                     }
+                  }
                 }
-                for (var l = 0; l < mirrors.length; l++) {
-                            drawMirror(mirrors[l]);
-                }
-                if(startX==null){
-                    
-               }else{
-                   ctx.clearRect(0, 0, w, h);
-                   for (var l = 0; l < mirrors.length; l++) {
-                            drawMirror(mirrors[l]);
-                }
-                   drawMirror(new Line(startX,startY,mouseX,mouseY));
-               }
+              }
             }
-
-            function reflectOverLine(x, y, line) {
-                return reflectBad({
-                        x: x,
-                        y: y
-                    }, {
-                        x: line.x,
-                        y: line.y
-                    }, {
-                        x: line.ex,
-                        y: line.ey
-                    });
+            lastMirror = closestMirror;
+            if (newLine == null) {
+              newLine = new Line(
+                line.ex,
+                line.ey,
+                ((line.ex - line.x) / line.len) * line.len + line.ex,
+                ((line.ey - line.y) / line.len) * line.len + line.ey
+              );
+              // line=newLine;
+              // continue
             }
-
-            function reflectBad(p, p0, p1) {
-                var dx, dy, a, b, x, y;
-
-                dx = p1.x - p0.x;
-                dy = p1.y - p0.y;
-                a = (dx * dx - dy * dy) / (dx * dx + dy * dy);
-                b = 2 * dx * dy / (dx * dx + dy * dy);
-                x = Math.round(a * (p.x - p0.x) + b * (p.y - p0.y) + p0.x);
-                y = Math.round(b * (p.x - p0.x) - a * (p.y - p0.y) + p0.y);
-
-                return {
-                    x: x,
-                    y: y
-                };
+            if (ray == null) {
+              var ray = new Line(line.x, line.y, line.ex, line.ey);
             }
-
-            function toRadians(angle) {
-                return angle * (Math.PI / 180);
+            ctx.globalCompositeOperation = "lighter";
+            ctx.strokeStyle = "rgba(10,10,10," + 1 + ")";
+            drawLine(ray);
+            ctx.globalCompositeOperation = "source-over";
+            line = newLine;
+            if (
+              !(
+                (Math.abs(line.x - width / 2) <= width / 2 &&
+                  Math.abs(line.y - height / 2) <= height / 2) ||
+                (Math.abs(line.ex - width / 2) <= width / 2 &&
+                  Math.abs(line.ey - height / 2) <= height / 2)
+              )
+            ) {
+              break;
             }
-            function toDeg(angle) {
-                return (angle * (  180/Math.PI)+360)%360;
-            }
+          }
+        }
+        for (var l = 0; l < mirrors.length; l++) {
+          drawMirror(mirrors[l]);
+        }
+        if (startX == null) {
+        } else {
+          //   ctx.clearRect(0, 0, w, h);
+          //   for (var l = 0; l < mirrors.length; l++) {
+          //     drawMirror(mirrors[l]);
+          //   }
+          //   drawMirror(new Line(startX, startY, mouseX, mouseY));
+        }
+      }
 
-            function lineIntersect(line1, line2) {
-                return checkLineIntersection(line1.x, line1.y, line1.ex, line1.ey, line2.x, line2.y, line2.ex, line2.ey);
-            }
+      function reflectOverLine(x, y, line) {
+        return reflectBad(
+          {
+            x: x,
+            y: y,
+          },
+          {
+            x: line.x,
+            y: line.y,
+          },
+          {
+            x: line.ex,
+            y: line.ey,
+          }
+        );
+      }
 
-            function checkLineIntersection(line1StartX, line1StartY, line1EndX, line1EndY, line2StartX, line2StartY, line2EndX, line2EndY) {
-                // if the lines intersect, the result contains the x and y of the intersection (treating the lines as infinite) and booleans for whether line segment 1 or line segment 2 contain the point
-                var denominator, a, b, numerator1, numerator2, result = {
-                        x: null,
-                        y: null,
-                        onLine1: false,
-                        onLine2: false
-                    };
-                denominator = ((line2EndY - line2StartY) * (line1EndX - line1StartX)) - ((line2EndX - line2StartX) * (line1EndY - line1StartY));
-                if (denominator == 0) {
-                    return result;
-                }
-                a = line1StartY - line2StartY;
-                b = line1StartX - line2StartX;
-                numerator1 = ((line2EndX - line2StartX) * a) - ((line2EndY - line2StartY) * b);
-                numerator2 = ((line1EndX - line1StartX) * a) - ((line1EndY - line1StartY) * b);
-                a = numerator1 / denominator;
-                b = numerator2 / denominator;
+      function reflectBad(p, p0, p1) {
+        var dx, dy, a, b, x, y;
 
-                // if we cast these lines infinitely in both directions, they intersect here:
-                result.x = line1StartX + (a * (line1EndX - line1StartX));
-                result.y = line1StartY + (a * (line1EndY - line1StartY));
-                /*
+        dx = p1.x - p0.x;
+        dy = p1.y - p0.y;
+        a = (dx * dx - dy * dy) / (dx * dx + dy * dy);
+        b = (2 * dx * dy) / (dx * dx + dy * dy);
+        x = Math.round(a * (p.x - p0.x) + b * (p.y - p0.y) + p0.x);
+        y = Math.round(b * (p.x - p0.x) - a * (p.y - p0.y) + p0.y);
+
+        return {
+          x: x,
+          y: y,
+        };
+      }
+
+      function toRadians(angle) {
+        return angle * (Math.PI / 180);
+      }
+      function toDeg(angle) {
+        return (angle * (180 / Math.PI) + 360) % 360;
+      }
+
+      function lineIntersect(line1, line2) {
+        return checkLineIntersection(
+          line1.x,
+          line1.y,
+          line1.ex,
+          line1.ey,
+          line2.x,
+          line2.y,
+          line2.ex,
+          line2.ey
+        );
+      }
+
+      function checkLineIntersection(
+        line1StartX,
+        line1StartY,
+        line1EndX,
+        line1EndY,
+        line2StartX,
+        line2StartY,
+        line2EndX,
+        line2EndY
+      ) {
+        // if the lines intersect, the result contains the x and y of the intersection (treating the lines as infinite) and booleans for whether line segment 1 or line segment 2 contain the point
+        var denominator,
+          a,
+          b,
+          numerator1,
+          numerator2,
+          result = {
+            x: null,
+            y: null,
+            onLine1: false,
+            onLine2: false,
+          };
+        denominator =
+          (line2EndY - line2StartY) * (line1EndX - line1StartX) -
+          (line2EndX - line2StartX) * (line1EndY - line1StartY);
+        if (denominator == 0) {
+          return result;
+        }
+        a = line1StartY - line2StartY;
+        b = line1StartX - line2StartX;
+        numerator1 =
+          (line2EndX - line2StartX) * a - (line2EndY - line2StartY) * b;
+        numerator2 =
+          (line1EndX - line1StartX) * a - (line1EndY - line1StartY) * b;
+        a = numerator1 / denominator;
+        b = numerator2 / denominator;
+
+        // if we cast these lines infinitely in both directions, they intersect here:
+        result.x = line1StartX + a * (line1EndX - line1StartX);
+        result.y = line1StartY + a * (line1EndY - line1StartY);
+        /*
         // it is worth noting that this should be the same as:
         x = line2StartX + (b * (line2EndX - line2StartX));
         y = line2StartX + (b * (line2EndY - line2StartY));
         */
-                // if line1 is a segment and line2 is infinite, they intersect if:
-                if (a > 0 && a < 1) {
-                    result.onLine1 = true;
-                }
-                // if line2 is a segment and line1 is infinite, they intersect if:
-                if (b > 0 && b < 1) {
-                    result.onLine2 = true;
-                }
-                // if line1 and line2 are segments, they intersect if both of the above are true
-                return result;
-            };
-        </script>
-
-    </body>
-
+        // if line1 is a segment and line2 is infinite, they intersect if:
+        if (a > 0 && a < 1) {
+          result.onLine1 = true;
+        }
+        // if line2 is a segment and line1 is infinite, they intersect if:
+        if (b > 0 && b < 1) {
+          result.onLine2 = true;
+        }
+        // if line1 and line2 are segments, they intersect if both of the above are true
+        return result;
+      }
+    </script>
+  </body>
 </html>
