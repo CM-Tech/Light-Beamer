@@ -128,7 +128,7 @@
       function tick() {
         requestAnimationFrame(tick);
         tickC += 1;
-        offSet = (offSet + (Math.sqrt(5) - 1) / 2) % 1;
+        // offSet = (offSet + (Math.sqrt(5) - 1) / 2) % 1;
         ctx.fillStyle = "rgba(1,1,1,1)";
         ctx.globalCompositeOperation = "difference";
         // ctx.globalAlpha=0.01;
@@ -157,7 +157,8 @@
           );
         }
         for (var i = 0; i < 360; i += 1) {
-          var dir = i + offSet; //rrrr;
+            offSet = (offSet + (Math.sqrt(5) - 1) / 2) % 1;
+          var dir = offSet*360;//i + offSet; //rrrr;
           var brightness = 0.02;
           let diag = Math.sqrt(
             window.innerWidth * window.innerWidth +
