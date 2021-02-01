@@ -157,7 +157,7 @@
           );
         }
         for (var i = 0; i < 360; i += 1) {
-            offSet = (offSet + (Math.sqrt(5) - 1) / 2) % 1;
+          offSet = (offSet + (Math.sqrt(5) - 1) / 2) % 1;
           var dir = offSet*360;//i + offSet; //rrrr;
           var brightness = 0.02;
           let diag = Math.sqrt(
@@ -277,8 +277,8 @@
               newLine = new Line(
                 line.ex,
                 line.ey,
-                ((line.ex - line.x) / line.len) * line.len + line.ex,
-                ((line.ey - line.y) / line.len) * line.len + line.ey
+                ((line.ex - line.x) / line.len) * diag + line.ex,
+                ((line.ey - line.y) / line.len) * diag + line.ey
               );
               // line=newLine;
               // continue
