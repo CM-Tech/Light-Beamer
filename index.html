@@ -2,12 +2,14 @@
   <head>
     <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.11.1/jquery.min.js"></script>
     <style>
-      #c,body,html {
+      #c,
+      body,
+      html {
         width: 100%;
         height: 100%;
         background: black;
-        margin:0;
-        padding:0;
+        margin: 0;
+        padding: 0;
       }
       .chat-input {
         display: absolute;
@@ -65,7 +67,7 @@
       var mouseY = 0;
       var mirrors = [];
       var mirrorsSize = 0;
-      var offSet = 0;
+      var offSet = Math.PI / 4;
       var startX = null;
       var startY = null;
       function getCoords(event) {
@@ -84,9 +86,355 @@
             (this.y - this.ey) * (this.y - this.ey)
         );
       }
+      function dotLines(a, b) {
+        return (a.ex - a.x) * (b.ex - b.x) + (a.ey - a.y) * (b.ey - b.y);
+      }
+      function Point(x, y) {
+        this.x = x;
+        this.y = y;
 
-      $("body").attr("onmousemove", "getCoords(event)");
-      $("body").mousedown(function (e) {
+        this.len = Math.sqrt(
+          (this.x - 0) * (this.x - 0) + (this.y - 0) * (this.y - 0)
+        );
+      }
+      function inside(point, vs) {
+        // ray-casting algorithm based on
+        // https://wrf.ecse.rpi.edu/Research/Short_Notes/pnpoly.html/pnpoly.html
+
+        var x = point[0],
+          y = point[1];
+
+        var inside = false;
+        for (var i = 0, j = vs.length - 1; i < vs.length; j = i++) {
+          var xi = vs[i][0],
+            yi = vs[i][1];
+          var xj = vs[j][0],
+            yj = vs[j][1];
+
+          var intersect =
+            yi > y != yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi;
+          if (intersect) inside = !inside;
+        }
+
+        return inside;
+      }
+      class LineProjection {
+        constructor(origin, horizon, hFar, nearClip, linesLeft, allLines) {
+          this.origin = origin;
+          this.horizon = horizon;
+          this.hFar = hFar;
+          this.nearClip = nearClip;
+          this.linesLeft = linesLeft;
+          this.allLines = allLines;
+          this.children = [];
+          this.boxLines = [
+            new Line(
+              this.nearClip.x,
+              this.nearClip.y,
+              this.horizon.x,
+              this.horizon.y
+            ),
+            this.horizon,
+            this.nearClip,
+            new Line(
+              this.nearClip.ex,
+              this.nearClip.ey,
+              this.horizon.ex,
+              this.horizon.ey
+            ),
+          ];
+          this.nearMirror = null;
+        }
+        calc(depth) {
+          this.children = [];
+          if (this.linesLeft.length > 0) {
+            let splitter = this.linesLeft[0];
+            let restLines = this.linesLeft.slice(1);
+            if (!this.lineInCone(splitter)) {
+              let l = new LineProjection(
+                this.origin,
+                this.horizon,
+                this.hFar,
+                this.nearClip,
+                restLines,
+                this.allLines
+              );
+              if (this.nearMirror !== null) {
+                l.nearMirror = this.nearMirror;
+              }
+              this.children.push(l);
+            } else {
+              let lineToTest = splitter;
+              if (dotLines(this.horizon, lineToTest) < 0) {
+                lineToTest = new Line(
+                  splitter.ex,
+                  splitter.ey,
+                  splitter.x,
+                  splitter.y
+                );
+              }
+              let AIN = this.pointInCone(new Point(lineToTest.x, lineToTest.y));
+              let BIN = this.pointInCone(
+                new Point(lineToTest.ex, lineToTest.ey)
+              );
+              if (true) {
+                let inters = this.boxLines
+                  .map((x) => lineIntersect(x, lineToTest))
+                  .filter((x) => x.onLine1 && x.onLine2);
+                let pts = inters.concat([]);
+                let cmpHoriz=(a,b)=>-dotLines(this.horizon,new Line(a[0].x,a[0].y, b[0].x,b[0].y));
+                if (AIN) pts.push(new Point(lineToTest.x, lineToTest.y));
+                if (BIN) pts.push(new Point(lineToTest.ex, lineToTest.ey));
+                let leftBarrier = lineIntersect(this.boxLines[0], lineToTest);
+                let rBarrier = lineIntersect(this.boxLines[3], lineToTest);
+                let ogPoints = pts.slice();
+                let LI = lineIntersect(this.boxLines[0], lineToTest);
+                let RI = lineIntersect(this.boxLines[3], lineToTest);
+                if (!(LI.onLine1 && LI.onLine2)) {
+                  if(dotLines(new Line(this.origin.x,this.origin.y,LI.x,LI.y),this.boxLines[0])>0){
+                    pts.push(LI);
+                  }else{
+                    pts.push(new Point(this.horizon.x,this.horizon.y))
+                  }
+                }
+                
+                if (!(RI.onLine1 && RI.onLine2)) {
+                  if(dotLines(new Line(this.origin.x,this.origin.y,RI.x,RI.y),this.boxLines[3])>0){
+                    pts.push(RI);
+                  }else{
+                    pts.push(new Point(this.horizon.ex,this.horizon.ey))
+                  }
+                }
+                let leftAtan=Math.atan2(this.horizon.y-this.origin.y,this.horizon.x-this.origin.x);
+                let q = pts.map((x) => [
+                  x,
+                  ((Math.atan2(x.y-this.origin.y,x.x-this.origin.x)-leftAtan)%(Math.PI*2)+Math.PI*2)%(Math.PI*2)
+                  // -dotLines(this.boxLines[0], new Line(0,0,(lineToTest.ey-lineToTest.y),-(lineToTest.ex-lineToTest.x)))<0?new Line(leftBarrier.x, leftBarrier.y, x.x, x.y).len:-new Line(rBarrier.x, rBarrier.y, x.x, x.y).len,
+                ]);
+                // q.sort((a, b) => -dotLines(this.horizon,new Line(a[0].x,a[0].y, b[0].x,b[0].y)));
+                q.sort((a, b) => a[1] - b[1]);
+                pts = q.map((x) => x[0]);
+                // console.log(pts);
+                // console.log(pts);
+                for (let o = 0; o < pts.length - 1; o++) {
+                  let leftPt = pts[o];
+                  let rightPt = pts[o + 1];
+                  let lineC = new Line(
+                    leftPt.x,
+                    leftPt.y,
+                    rightPt.x,
+                    rightPt.y
+                  );
+                  let newNC = this.nearClip;
+                  if (newNC.len > 0) {
+                    let newNCLeft = lineIntersect(
+                      newNC,
+                      new Line(this.origin.x, this.origin.y, leftPt.x, leftPt.y)
+                    );
+                    let newNCRight = lineIntersect(
+                      newNC,
+                      new Line(
+                        this.origin.x,
+                        this.origin.y,
+                        rightPt.x,
+                        rightPt.y
+                      )
+                    );
+
+                    newNC = new Line(
+                      newNCLeft.x,
+                      newNCLeft.y,
+                      newNCRight.x,
+                      newNCRight.y
+                    );
+                  }
+                  let newFC = this.horizon;
+                  if (newFC.len > 0) {
+                    let newFCLeft = lineIntersect(
+                      newFC,
+                      new Line(this.origin.x, this.origin.y, leftPt.x, leftPt.y)
+                    );
+                    let newFCRight = lineIntersect(
+                      newFC,
+                      new Line(
+                        this.origin.x,
+                        this.origin.y,
+                        rightPt.x,
+                        rightPt.y
+                      )
+                    );
+
+                    newFC = new Line(
+                      newFCLeft.x,
+                      newFCLeft.y,
+                      newFCRight.x,
+                      newFCRight.y
+                    );
+                  }
+                  let hitLine = false;
+                  hitLine = true;
+                  if (ogPoints.indexOf(rightPt) < 0) {
+                    hitLine = false;
+                  }
+                  if (ogPoints.indexOf(leftPt) < 0) {
+                    hitLine = false;
+                  }
+                  if (hitLine) {
+                    newFC = lineC;
+                  }
+                  let l = new LineProjection(
+                    this.origin,
+                    newFC,
+                    this.hFar && !hitLine,
+                    newNC,
+                    restLines,
+                    this.allLines
+                  );
+                  if (this.nearMirror !== null) {
+                    l.nearMirror = this.nearMirror;
+                  }
+                  if (hitLine) {
+                    l.nearMirror = splitter;
+                  }
+                  this.children.push(l);
+                }
+              }
+            }
+            if (this.children.length > 0) {
+              this.children.forEach((x) => x.calc(depth));
+            }
+          } else if (!this.hFar && depth > 0) {
+            let reflectionLine = this.horizon;
+            let newNC = new Line(
+              reflectionLine.ex,
+              reflectionLine.ey,
+              reflectionLine.x,
+              reflectionLine.y
+            );
+            let newOrigin = reflectOverLine(
+              this.origin.x,
+              this.origin.y,
+              reflectionLine
+            );
+            const reflectLineOverLine = (a, b) => {
+              let pa = reflectOverLine(a.x, a.y, b);
+              let pb = reflectOverLine(a.ex, a.ey, b);
+              return new Line(pa.x, pa.y, pb.x, pb.y);
+            };
+            let newAllLines = this.allLines;
+            // .map((x) =>
+            //   reflectLineOverLine(x, reflectionLine)
+            // );
+            let nearNear = lineIntersect(
+                      newNC,
+                      new Line(
+                        newOrigin.x,
+                        newOrigin.y,
+                        newOrigin.x-(newNC.ey-newNC.y),
+                        newOrigin.y+(newNC.ex-newNC.x)
+                      )
+                    );
+              let d=new Line(newOrigin.x,
+                        newOrigin.y,nearNear.x,nearNear.y).len;
+            let S = 1+Math.sqrt(w*w+h*h)/d;
+            let newFC = new Line(
+              (newNC.x - newOrigin.x) * S + newOrigin.x,
+              (newNC.y - newOrigin.y) * S + newOrigin.y,
+              (newNC.ex - newOrigin.x) * S + newOrigin.x,
+              (newNC.ey - newOrigin.y) * S + newOrigin.y
+            );
+            let l = new LineProjection(
+              newOrigin,
+              newFC,
+              true,
+              newNC,
+              newAllLines.filter((x) => x !== this.nearMirror),
+              newAllLines
+            );
+            this.children.push(l);
+            if (this.children.length > 0) {
+              this.children.forEach((x) => x.calc(depth - 1));
+            }
+          }
+        }
+        draw(ctx) {
+          if (this.linesLeft.length > 0) {
+            this.children.forEach((x) => x.draw(ctx));
+          } else {
+            ctx.beginPath();
+            ctx.moveTo(this.nearClip.x, this.nearClip.y);
+            ctx.lineTo(this.nearClip.ex, this.nearClip.ey);
+            ctx.lineTo(this.horizon.ex, this.horizon.ey);
+
+            ctx.lineTo(this.horizon.x, this.horizon.y);
+            ctx.closePath();
+            // ctx.fillStyle = `rgba(255,255,255,0.1)`;
+            let range = 10000;
+            var gradient = ctx.createRadialGradient(
+              this.origin.x,
+              this.origin.y,
+              0,
+              this.origin.x,
+              this.origin.y,
+              range
+            );
+            let slices = 1000;
+            for (let i = 0; i < slices; i++) {
+              let r = (range / (slices )) * i;
+              const g=x=>Math.min(Math.floor(x*255),255)
+              let b=100 / (r + 1);//*(1+Math.sin(r/2));
+              gradient.addColorStop(
+                r / range,
+                `rgba(${g(b)},${g(b)},${g(b)},1)`
+              );
+            }
+            ctx.globalCompositeOperation="lighter"
+            ctx.fillStyle = gradient;
+            ctx.fill();
+            // ctx.lineWidth=0.5;
+            // ctx.strokeStyle = gradient;
+            // ctx.stroke();
+            this.children.forEach((x) => x.draw(ctx));
+          }
+        }
+        pointInCone(pointToTest) {
+          // let lineTOr=new Line(this.origin.x,this.origin.y,pointToTest.x,pointToTest.y);
+          // let lineFOr=new Line(this.origin.x,this.origin.y,pointToTest.x,pointToTest.y);
+          // let lineNOr=new Line(this.origin.x,this.origin.y,pointToTest.x,pointToTest.y);
+          // let dotD=pointToTest.x*
+          return inside(
+            [pointToTest.x, pointToTest.y],
+            [
+              [this.nearClip.x, this.nearClip.y],
+              [this.nearClip.ex, this.nearClip.ey],
+              [this.horizon.ex, this.horizon.ey],
+              [this.horizon.x, this.horizon.y],
+            ]
+          );
+        }
+        lineInCone(lineToTest) {
+          if(lineToTest.len===0){
+            return false;
+          }
+          if (
+            this.pointInCone(new Point(lineToTest.x, lineToTest.y)) ||
+            this.pointInCone(new Point(lineToTest.ex, lineToTest.ey))
+          ) {
+            return true;
+          }
+          if (
+            this.boxLines
+              .map((x) => lineIntersect(x, lineToTest))
+              .map((x) => x.onLine1 && x.onLine2)
+              .find((x) => x)
+          ) {
+            return true;
+          }
+          return false;
+        }
+      }
+      document.body.addEventListener("mousemove", getCoords);
+      document.body.addEventListener("mousedown", function (e) {
         if (startX == null) {
           //   ctx.clearRect(0, 0, w, h);
           mirrors[mirrorsSize++] = new Line(mouseX, mouseY, mouseX, mouseY);
@@ -100,14 +448,11 @@
         }
       });
 
-      $(".chat-input").keypress(function (e) {
-        readableName = $(".chat-input").val();
-      });
-      $("body").keypress(function (e) {
-        if (e.which == 32) {
-          //ctx.clearRect(0, 0, w, h);
-        }
-      });
+      // $("body").keypress(function (e) {
+      //   if (e.which == 32) {
+      //     //ctx.clearRect(0, 0, w, h);
+      //   }
+      // });
 
       tick();
       //var list = $firebaseArray(ref);
@@ -130,20 +475,20 @@
         tickC += 1;
         // offSet = (offSet + (Math.sqrt(5) - 1) / 2) % 1;
         ctx.fillStyle = "rgba(1,1,1,1)";
-        ctx.globalCompositeOperation = "difference";
-        // ctx.globalAlpha=0.01;
+        // ctx.globalCompositeOperation = "difference";
+        // ctx.globalAlpha = 0.05;
         //     ctx.fillStyle = "#eeeeee";//"rgba(255,255,255," + brightness + ")";
-        if (tickC % 1 == 0) {
-          ctx.fillRect(0, 0, w, h);
-        }
-        // ctx.drawImage(c,0,0);
+        // if (tickC % 1 == 0) {
+        //   ctx.fillRect(0, 0, w, h);
+        // }
+        // ctx.drawImage(c, 0, 0);
         ctx.globalCompositeOperation = "source-over";
 
         ctx.globalAlpha = 1;
-        ctx.fillStyle = "rgba(0,0,0,0.05)";
-        if (tickC % 1 == 0) {
-          ctx.fillRect(0, 0, w, h);
-        }
+        ctx.fillStyle = "rgba(0,0,0,1)";
+        // if (tickC % 1 == 0) {
+        ctx.fillRect(0, 0, w, h);
+        // }
         // ctx.fill();
         let rrrr = Math.random();
         let height = c.height;
@@ -156,153 +501,198 @@
             mouseY
           );
         }
-        for (var i = 0; i < 360; i += 1) {
-          offSet = (offSet + (Math.sqrt(5) - 1) / 2) % 1;
-          var dir = offSet*360;//i + offSet; //rrrr;
-          var brightness = 0.02;
-          let diag = Math.sqrt(
-            window.innerWidth * window.innerWidth +
-              window.innerHeight * window.innerHeight
-          );
-          var line = new Line(
-            w / 2.0,
-            h / 2.0,
-            w / 2.0 + Math.sin(toRadians(dir)) * diag,
-            h / 2.0 + Math.cos(toRadians(dir)) * diag
-          );
+        let rg = 4;
+        let topHorizon = new Line(0, 0, w, 0);
+        let origin = new Point(w / 2.0, h / 2.0);
+        let originClip = new Line(w / 2.0, h / 2.0, w / 2.0, h / 2.0);
+        let cl=10;
+        let proj1 = new LineProjection(
+          origin,
+          topHorizon,
+          true,
+          originClip,
+          mirrors.slice(),
+          mirrors.slice()
+        );
+        proj1.calc(cl);
+        proj1.draw(ctx);
+        let proj2 = new LineProjection(
+          origin,
+          new Line(w, 0, w, h),
+          true,
+          originClip,
+          mirrors.slice(),
+          mirrors.slice()
+        );
+        proj2.calc(cl);
+        proj2.draw(ctx);
+        let proj3 = new LineProjection(
+          origin,
+          new Line(w, h, 0, h),
+          true,
+          originClip,
+          mirrors.slice(),
+          mirrors.slice()
+        );
+        proj3.calc(cl);
+        proj3.draw(ctx);
+        let proj4 = new LineProjection(
+          origin,
+          new Line(0, h,0,0),
+          true,
+          originClip,
+          mirrors.slice(),
+          mirrors.slice()
+        );
+        proj4.calc(cl);
+        proj4.draw(ctx);
+        // for (var i = 0; i < 360; i += 1) {
+        //   offSet = (offSet + (Math.sqrt(5) - 1) / 2) % 1;
+        //   var dir = offSet*360;//i + offSet; //rrrr;
+        //   var brightness = 0.02;
+        //   let diag = Math.sqrt(
+        //     window.innerWidth * window.innerWidth +
+        //       window.innerHeight * window.innerHeight
+        //   );
+        //   var line = new Line(
+        //     w / 2.0,
+        //     h / 2.0,
+        //     w / 2.0 + Math.sin(toRadians(dir)) * diag,
+        //     h / 2.0 + Math.cos(toRadians(dir)) * diag
+        //   );
 
-          let lastMirror = null;
-          for (var r = 0; r < 100; r++) {
-            var newLine = null;
-            var ray = null;
-            let closestMirror = null;
-            let closestLen = null;
-            for (var l = 0; l < mirrors.length; l++) {
-              var lineIntersection = lineIntersect(mirrors[l], line);
-              if (
-                lineIntersection.x != null &&
-                lineIntersection.onLine1 &&
-                mirrors[l] !== lastMirror
-              ) {
-                if (
-                  Math.round(
-                    toDeg(
-                      Math.atan2(
-                        lineIntersection.x - line.x,
-                        lineIntersection.y - line.y
-                      )
-                    )
-                  ) ==
-                  Math.round(
-                    toDeg(Math.atan2(line.ex - line.x, line.ey - line.y))
-                  )
-                ) {
-                  var newRay = new Line(
-                    line.x,
-                    line.y,
-                    lineIntersection.x,
-                    lineIntersection.y
-                  );
-                  if (closestMirror === null) {
-                    closestMirror = mirrors[l];
-                    closestLen = newRay.len;
-                  } else if (closestLen > newRay.len) {
-                    closestLen = newRay.len;
-                    closestMirror = mirrors[l];
-                  }
-                }
-              }
-            }
-            if (closestMirror !== null) {
-              var l = mirrors.indexOf(closestMirror);
-              var lineIntersection = lineIntersect(mirrors[l], line);
-              if (
-                lineIntersection.x != null &&
-                lineIntersection.onLine1 &&
-                mirrors[l] !== lastMirror
-              ) {
-                lastMirror = mirrors[l];
+        //   let lastMirror = null;
+        //   for (var r = 0; r < 100; r++) {
+        //     var newLine = null;
+        //     var ray = null;
+        //     let closestMirror = null;
+        //     let closestLen = null;
+        //     for (var l = 0; l < mirrors.length; l++) {
+        //       var lineIntersection = lineIntersect(mirrors[l], line);
+        //       if (
+        //         lineIntersection.x != null &&
+        //         lineIntersection.onLine1 &&
+        //         mirrors[l] !== lastMirror
+        //       ) {
+        //         if (
+        //           Math.round(
+        //             toDeg(
+        //               Math.atan2(
+        //                 lineIntersection.x - line.x,
+        //                 lineIntersection.y - line.y
+        //               )
+        //             )
+        //           ) ==
+        //           Math.round(
+        //             toDeg(Math.atan2(line.ex - line.x, line.ey - line.y))
+        //           )
+        //         ) {
+        //           var newRay = new Line(
+        //             line.x,
+        //             line.y,
+        //             lineIntersection.x,
+        //             lineIntersection.y
+        //           );
+        //           if (closestMirror === null) {
+        //             closestMirror = mirrors[l];
+        //             closestLen = newRay.len;
+        //           } else if (closestLen > newRay.len) {
+        //             closestLen = newRay.len;
+        //             closestMirror = mirrors[l];
+        //           }
+        //         }
+        //       }
+        //     }
+        //     if (closestMirror !== null) {
+        //       var l = mirrors.indexOf(closestMirror);
+        //       var lineIntersection = lineIntersect(mirrors[l], line);
+        //       if (
+        //         lineIntersection.x != null &&
+        //         lineIntersection.onLine1 &&
+        //         mirrors[l] !== lastMirror
+        //       ) {
+        //         lastMirror = mirrors[l];
 
-                if (
-                  Math.round(
-                    toDeg(
-                      Math.atan2(
-                        lineIntersection.x - line.x,
-                        lineIntersection.y - line.y
-                      )
-                    )
-                  ) ==
-                  Math.round(
-                    toDeg(Math.atan2(line.ex - line.x, line.ey - line.y))
-                  )
-                ) {
-                  var newRay = new Line(
-                    line.x,
-                    line.y,
-                    lineIntersection.x,
-                    lineIntersection.y
-                  );
+        //         if (
+        //           Math.round(
+        //             toDeg(
+        //               Math.atan2(
+        //                 lineIntersection.x - line.x,
+        //                 lineIntersection.y - line.y
+        //               )
+        //             )
+        //           ) ==
+        //           Math.round(
+        //             toDeg(Math.atan2(line.ex - line.x, line.ey - line.y))
+        //           )
+        //         ) {
+        //           var newRay = new Line(
+        //             line.x,
+        //             line.y,
+        //             lineIntersection.x,
+        //             lineIntersection.y
+        //           );
 
-                  var reflectionLine = new Line(
-                    lineIntersection.x,
-                    lineIntersection.y,
-                    lineIntersection.x + (mirrors[l].y - lineIntersection.y),
-                    lineIntersection.y + (lineIntersection.x - mirrors[l].x)
-                  );
+        //           var reflectionLine = new Line(
+        //             lineIntersection.x,
+        //             lineIntersection.y,
+        //             lineIntersection.x + (mirrors[l].y - lineIntersection.y),
+        //             lineIntersection.y + (lineIntersection.x - mirrors[l].x)
+        //           );
 
-                  if (newLine == null) {
-                    newLine = new Line(
-                      lineIntersection.x,
-                      lineIntersection.y,
-                      reflectOverLine(line.x, line.y, reflectionLine).x,
-                      reflectOverLine(line.x, line.y, reflectionLine).y
-                    );
-                    ray = newRay;
-                  } else {
-                    if (ray.len > newRay.len) {
-                      newLine = new Line(
-                        lineIntersection.x,
-                        lineIntersection.y,
-                        reflectOverLine(line.x, line.y, reflectionLine).x,
-                        reflectOverLine(line.x, line.y, reflectionLine).y
-                      );
-                      ray = newRay;
-                    }
-                  }
-                }
-              }
-            }
-            lastMirror = closestMirror;
-            if (newLine == null) {
-              newLine = new Line(
-                line.ex,
-                line.ey,
-                ((line.ex - line.x) / line.len) * diag + line.ex,
-                ((line.ey - line.y) / line.len) * diag + line.ey
-              );
-              // line=newLine;
-              // continue
-            }
-            if (ray == null) {
-              var ray = new Line(line.x, line.y, line.ex, line.ey);
-            }
-            ctx.globalCompositeOperation = "lighter";
-            ctx.strokeStyle = "rgba(10,10,10," + 1 + ")";
-            drawLine(ray);
-            ctx.globalCompositeOperation = "source-over";
-            line = newLine;
-            if (
-              !(
-                (Math.abs(line.x - width / 2) <= width / 2 &&
-                  Math.abs(line.y - height / 2) <= height / 2) ||
-                (Math.abs(line.ex - width / 2) <= width / 2 &&
-                  Math.abs(line.ey - height / 2) <= height / 2)
-              )
-            ) {
-              break;
-            }
-          }
-        }
+        //           if (newLine == null) {
+        //             newLine = new Line(
+        //               lineIntersection.x,
+        //               lineIntersection.y,
+        //               reflectOverLine(line.x, line.y, reflectionLine).x,
+        //               reflectOverLine(line.x, line.y, reflectionLine).y
+        //             );
+        //             ray = newRay;
+        //           } else {
+        //             if (ray.len > newRay.len) {
+        //               newLine = new Line(
+        //                 lineIntersection.x,
+        //                 lineIntersection.y,
+        //                 reflectOverLine(line.x, line.y, reflectionLine).x,
+        //                 reflectOverLine(line.x, line.y, reflectionLine).y
+        //               );
+        //               ray = newRay;
+        //             }
+        //           }
+        //         }
+        //       }
+        //     }
+        //     lastMirror = closestMirror;
+        //     if (newLine == null) {
+        //       newLine = new Line(
+        //         line.ex,
+        //         line.ey,
+        //         ((line.ex - line.x) / line.len) * diag + line.ex,
+        //         ((line.ey - line.y) / line.len) * diag + line.ey
+        //       );
+        //       // line=newLine;
+        //       // continue
+        //     }
+        //     if (ray == null) {
+        //       var ray = new Line(line.x, line.y, line.ex, line.ey);
+        //     }
+        //     ctx.globalCompositeOperation = "lighter";
+        //     ctx.strokeStyle = "rgba(10,10,10," + 1 + ")";
+        //     drawLine(ray);
+        //     ctx.globalCompositeOperation = "source-over";
+        //     line = newLine;
+        //     if (
+        //       !(
+        //         (Math.abs(line.x - width / 2) <= width / 2 &&
+        //           Math.abs(line.y - height / 2) <= height / 2) ||
+        //         (Math.abs(line.ex - width / 2) <= width / 2 &&
+        //           Math.abs(line.ey - height / 2) <= height / 2)
+        //       )
+        //     ) {
+        //       break;
+        //     }
+        //   }
+        // }
         for (var l = 0; l < mirrors.length; l++) {
           drawMirror(mirrors[l]);
         }
